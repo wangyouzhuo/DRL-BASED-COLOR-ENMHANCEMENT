@@ -5,11 +5,18 @@ from train_encoder.config_of_encoder import *
 from operations.generate_weight import *
 
 
+random_prob = []
+for i in range(ACTION_SIZE):
+    random_prob.append(1.0/ACTION_SIZE)
+
+
 class Encoder_Network(object):
 
-    def __init__(self,name):
+    def __init__(self,name,sess,global_net = None):
 
         with tf.name_scope(name):
+
+            self.session = sess
 
             self.current_image = tf.placeholder(tf.float32,[None,IMAGE_WIDTH,IMAGE_HEIGHT,IMAGE_CHANNEL], 'Current_image')
 
@@ -25,9 +32,17 @@ class Encoder_Network(object):
 
             if 'global' in name:
 
-                self.current_feature = self._build_encoder(input=self.current_image)
-                self.next_feature    = self._build_encoder(input=self.next_image)
+                self.current_feature = self._build_encoder(input_image=self.current_image)
+                self.next_feature    = self._build_encoder(input_image=self.next_image)
 
+                if global_net :
+                    self.global_net = global_net
+                else:
+                    print('global_net can not be None !!!!!')
+
+                self.action_prob,self.a_p_loss,self.update_a_p_op,self.pull_a_p_op = self._prepare_action_predicter(current_feature=self.current_feature,next_feature=self.next_feature)
+
+                self.loss,self.update_s_p_op,self.pull_s_p_op = self._prepare_state_predicter(current_feature=self.current_feature,action=self.action,next_image=self.next_image)
 
 
 
@@ -78,16 +93,15 @@ class Encoder_Network(object):
             # weight for action_predicter
             self.a_p_weight = generate_fc_weight(shape=[1024*2,ACTION_SIZE],name='a_p_weight')
             self.a_p_bias   = generate_fc_bias(shape=[ACTION_SIZE],name='a_p_bias')
-
-
-
-
-            # weight for state predicter
-
-
-
+            self.action_predict_params = [self.a_p_weight,self.a_p_bias]
 
             # weight for state_predicter
+            self.s_p_weight_1 = generate_fc_weight(shape=[1024+ACTION_SIZE,1024],name='s_p_weight_1')
+            self.s_p_bias_1   = generate_fc_bias(shape=[1024],name='s_p_bias_1')
+            self.s_p_weight_2 = generate_fc_weight(shape=[1024,1024],name='s_p_weight_2')
+            self.s_p_bias_2   = generate_fc_bias(shape=[1024],name='s_p_bias_2')
+            self.state_predict_params = [self.s_p_weight_1,self.s_p_bias_1,self.s_p_weight_2,self.s_p_bias_2]
+
 
     def _build_encoder(self,input_image):
         conv1 = tf.nn.conv2d(input_image, self.conv1_weight, strides=[1, 2, 2, 1], padding='SAME')
@@ -139,7 +153,7 @@ class Encoder_Network(object):
         # 56x56x3
 
         resize9 = tf.image.resize_images(conv8,size=(112,112),method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        conv9 = tf.nn.conv2d(resize9, self.conv7_weight, strides=[1,1,1,1],padding='SAME')
+        conv9 = tf.nn.conv2d(resize9, self.conv9_weight, strides=[1,1,1,1],padding='SAME')
         conv9 = tf.nn.elu(tf.nn.bias_add(conv9, self.conv9_bias))
         # 112x112x3
 
@@ -147,6 +161,75 @@ class Encoder_Network(object):
 
         return resize10
 
+
+    def _prepare_action_predicter(self,current_feature,next_feature):
+
+        concat_feature = tf.concat([current_feature,next_feature],axis=1)  # 1024||1024 --> ACTION-SIZE
+        action_prob = tf.nn.softmax(tf.matmul(concat_feature,self.a_p_weight) + self.a_p_bias)
+
+        a_p_loss = -tf.reduce_mean(tf.one_hot(self.action,ACTION_SIZE,dtype=tf.float32)*
+                                   tf.log(tf.clip_by_value(action_prob,1e-10,1.0)))
+
+        a_p_grads = [tf.clip_by_norm(item, 40) for item in tf.gradients(self.action_predict_loss,
+                                  self.encoder_params + self.action_predict_params )]
+
+        update_a_p_op = self.OPT.apply_gradients(a_p_grads,
+                                self.global_net.encoder_params + self.global_net.action_predict_params)
+
+        pull_a_p_op = [l_p.assign(g_p) for l_p, g_p in zip(self.encoder_params + self.action_predict_params,
+                                self.global_net.encoder_params + self.global_net.action_predict_params)]
+
+        return action_prob,a_p_loss,update_a_p_op,pull_a_p_op
+
+    def _prepare_state_predicter(self,current_feature,action,next_image):
+
+        concat_feature = tf.concat([current_feature , tf.one_hot(action,4,dtype=tf.float32)])
+
+        s_p_temp = (tf.matmul(concat_feature,self.s_p_weight_1) + self.s_p_bias_1)
+
+        state_feature_predicted = (tf.matmul(s_p_temp,self.s_p_weight_2) + self.s_p_bias_2)
+
+        next_image_predicted = self._build_decoder(state_feature_predicted)
+
+        loss = tf.subtract(next_image,next_image_predicted)
+
+        s_p_grads = [tf.clip_by_norm(item, 40) for item in
+                     tf.gradients(loss , self.state_predict_params + self.encoder_params)]
+
+        update_s_p_op = self.OPT.apply_gradients(s_p_grads,
+                                         self.global_net.state_predict_params + self.global_net.encoder_params)
+
+        pull_s_p_op = [l_p.assign(g_p) for l_p, g_p in zip(self.encoder_params + self.state_predict_params,
+                                         self.global_net.encoder_params + self.global_net.state_predict_params)]
+
+        return loss,update_s_p_op,pull_s_p_op
+
+
+    # choose action:
+
+    def random_choose_action(self):
+        action = np.random.choice(range(ACTION_SIZE),p=random_prob)
+        return action
+
+    def update_state_predicter(self,current_image,action,next_image,learning_rate):
+        self.session.run(self.update_s_p_op,
+                         feed_dict = {self.current_image:current_image,
+                                      self.action:action,
+                                      self.next_image:next_image,
+                                      self.learning_rate:learning_rate})
+
+    def update_action_predicter(self,current_image,action,next_image,learning_rate):
+        self.session.run(self.update_a_p_op,
+                         feed_dict = {
+                             self.current_image:current_image,
+                             self.action:action,
+                             self.next_image:next_image,
+                             self.learning_rate:learning_rate
+                         })
+
+
+    def pull_all_params(self):
+        self.session.run([self.pull_a_p_op,self.pull_s_p_op])
 
 
 
