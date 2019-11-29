@@ -52,9 +52,9 @@ class Encoder_Network(object):
             self.conv1_bias   = generate_conv2d_bias(shape=8            ,name='conv1_bias_encode')
             self.conv2_weight = generate_conv2d_weight(shape=[3,3,8,16] ,name="conv2_weight_encode")
             self.conv2_bias   = generate_conv2d_bias(shape=16           ,name='conv2_bias_encode')
-            self.conv3_weight = generate_conv2d_weight(shape=[2,2,16,32],name="conv3_weight_encode")
+            self.conv3_weight = generate_conv2d_weight(shape=[3,3,16,32],name="conv3_weight_encode")
             self.conv3_bias   = generate_conv2d_bias(shape=32           ,name='conv3_bias_encode')
-            self.conv4_weight = generate_conv2d_weight(shape=[2,2,32,64],name="conv4_weight_encode")
+            self.conv4_weight = generate_conv2d_weight(shape=[3,3,32,64],name="conv4_weight_encode")
             self.conv4_bias   = generate_conv2d_bias(shape=64           ,name='conv4_bias_encode')
             self.fc_weight_encoder    = generate_fc_weight(shape=[1024,1024]    ,name='fc_weight_encode')
             self.fc_bias_encoder      = generate_fc_weight(shape=[1024]         ,name='fc_bias_encode')
@@ -120,6 +120,7 @@ class Encoder_Network(object):
         conv4 = tf.nn.elu(tf.nn.bias_add(conv4,self.conv4_bias))
 
         flatten_feature = flatten(conv4) # 1024-d
+        print(flatten_feature)
 
         state_feature = tf.nn.elu(tf.matmul(flatten_feature, self.fc_weight_encoder) + self.fc_bias_encoder) # 1024
 
@@ -169,7 +170,7 @@ class Encoder_Network(object):
         a_p_loss = -tf.reduce_mean(tf.one_hot(self.action,ACTION_SIZE,dtype=tf.float32)*
                                    tf.log(tf.clip_by_value(action_prob,1e-10,1.0)))
 
-        a_p_grads = [tf.clip_by_norm(item, 40) for item in tf.gradients(self.action_predict_loss,
+        a_p_grads = [tf.clip_by_norm(item, 40) for item in tf.gradients(a_p_loss,
                                   self.encoder_params + self.action_predict_params )]
 
         update_a_p_op = self.OPT.apply_gradients(a_p_grads,
@@ -236,4 +237,9 @@ class Encoder_Network(object):
 
 if __name__ == '__main__':
 
-    Encoder_Network('global')
+
+    sess = tf.Session()
+
+    global_net = Encoder_Network('Global',sess=sess)
+
+    Encoder_Network('local',sess=sess,global_net=global_net)
