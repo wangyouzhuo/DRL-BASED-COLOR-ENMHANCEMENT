@@ -120,7 +120,7 @@ class Encoder_Network(object):
         conv4 = tf.nn.elu(tf.nn.bias_add(conv4,self.conv4_bias))
 
         flatten_feature = flatten(conv4) # 1024-d
-        print(flatten_feature)
+        print("flatten_feature : ",flatten_feature)
 
         state_feature = tf.nn.elu(tf.matmul(flatten_feature, self.fc_weight_encoder) + self.fc_bias_encoder) # 1024
 
@@ -173,8 +173,8 @@ class Encoder_Network(object):
         a_p_grads = [tf.clip_by_norm(item, 40) for item in tf.gradients(a_p_loss,
                                   self.encoder_params + self.action_predict_params )]
 
-        update_a_p_op = self.OPT.apply_gradients(a_p_grads,
-                                self.global_net.encoder_params + self.global_net.action_predict_params)
+        update_a_p_op = self.OPT.apply_gradients(list(zip(a_p_grads,
+                            self.global_net.encoder_params + self.global_net.action_predict_params)))
 
         pull_a_p_op = [l_p.assign(g_p) for l_p, g_p in zip(self.encoder_params + self.action_predict_params,
                                 self.global_net.encoder_params + self.global_net.action_predict_params)]
@@ -183,7 +183,7 @@ class Encoder_Network(object):
 
     def _prepare_state_predicter(self,current_feature,action,next_image):
 
-        concat_feature = tf.concat([current_feature , tf.one_hot(action,4,dtype=tf.float32)])
+        concat_feature = tf.concat([current_feature , tf.one_hot(action,ACTION_SIZE,dtype=tf.float32)],axis=1)
 
         s_p_temp = (tf.matmul(concat_feature,self.s_p_weight_1) + self.s_p_bias_1)
 
@@ -196,8 +196,8 @@ class Encoder_Network(object):
         s_p_grads = [tf.clip_by_norm(item, 40) for item in
                      tf.gradients(loss , self.state_predict_params + self.encoder_params)]
 
-        update_s_p_op = self.OPT.apply_gradients(s_p_grads,
-                                         self.global_net.state_predict_params + self.global_net.encoder_params)
+        update_s_p_op = self.OPT.apply_gradients(list(zip(s_p_grads,
+                                         self.global_net.state_predict_params + self.global_net.encoder_params)))
 
         pull_s_p_op = [l_p.assign(g_p) for l_p, g_p in zip(self.encoder_params + self.state_predict_params,
                                          self.global_net.encoder_params + self.global_net.state_predict_params)]
