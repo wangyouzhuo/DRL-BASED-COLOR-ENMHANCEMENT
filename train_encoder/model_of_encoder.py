@@ -191,7 +191,7 @@ class Encoder_Network(object):
 
         next_image_predicted = self._build_decoder(state_feature_predicted)
 
-        loss = tf.subtract(next_image,next_image_predicted)
+        loss = tf.reduce_mean(tf.square(tf.subtract(next_image,next_image_predicted)))
 
         s_p_grads = [tf.clip_by_norm(item, 40) for item in
                      tf.gradients(loss , self.state_predict_params + self.encoder_params)]
