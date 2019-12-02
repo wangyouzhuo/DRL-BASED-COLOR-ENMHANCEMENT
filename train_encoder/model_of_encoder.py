@@ -212,20 +212,24 @@ class Encoder_Network(object):
         return action
 
     def update_state_predicter(self,current_image,action,next_image,learning_rate):
-        self.session.run(self.update_s_p_op,
+        _, s_p_loss = self.session.run([self.update_s_p_op, self.loss], 
                          feed_dict = {self.current_image:current_image,
                                       self.action:action,
                                       self.next_image:next_image,
                                       self.learning_rate:learning_rate})
+        # print(s_p_loss/64)
+        return s_p_loss 
 
     def update_action_predicter(self,current_image,action,next_image,learning_rate):
-        self.session.run(self.update_a_p_op,
+        _, a_pr_loss = self.session.run([self.update_a_p_op, self.a_p_loss], 
                          feed_dict = {
                              self.current_image:current_image,
                              self.action:action,
                              self.next_image:next_image,
                              self.learning_rate:learning_rate
                          })
+
+        return a_pr_loss 
 
 
     def get_loss(self,current_image,action,next_image):
