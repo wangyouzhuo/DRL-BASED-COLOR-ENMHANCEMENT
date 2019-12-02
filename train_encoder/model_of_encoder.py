@@ -42,7 +42,7 @@ class Encoder_Network(object):
 
                 self.action_prob,self.a_p_loss,self.update_a_p_op,self.pull_a_p_op = self._prepare_action_predicter(current_feature=self.current_feature,next_feature=self.next_feature)
 
-                self.a_p_loss,self.update_s_p_op,self.pull_s_p_op = self._prepare_state_predicter(current_feature=self.current_feature,action=self.action,next_image=self.next_image)
+                self.s_p_loss,self.update_s_p_op,self.pull_s_p_op = self._prepare_state_predicter(current_feature=self.current_feature,action=self.action,next_image=self.next_image)
 
 
     def _prepare_weight(self):
@@ -228,7 +228,14 @@ class Encoder_Network(object):
                          })
 
 
-    def print_loss(self,current_image,action,next_image):
+    def get_loss(self,current_image,action,next_image):
+        a_p_loss,s_p_loss = self.session.run([self.a_p_loss,self.s_p_loss],feed_dict={
+            self.current_image:current_image,
+            self.action:action,
+            self.next_image:next_image
+        })
+        return a_p_loss,s_p_loss
+
 
 
 
