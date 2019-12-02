@@ -5,11 +5,12 @@
 import numpy as np
 import os
 import random
-from utils.load_image import *
-from utils.retouch_op import *
-from utils.train_op import *
+# from utils.load_image import *
+# from utils.retouch_op import *
+# from utils.train_op import *
 import time
-import utils.action 
+# import train_encoder.action 
+from train_encoder import action 
 import skimage.color as color 
 
 from scipy.misc import imread, imresize
@@ -35,7 +36,8 @@ class Environment(object):
         shape: [batch_size, 224, 224, 3]
         '''
         images_np = []
-        img_list = self.target_name_list[offset:offset * self.batch_size]
+        img_list = self.target_name_list[offset*self.batch_size:(offset+1)*self.batch_size]
+        # print('******', len(img_list))
         for path in img_list:
             img_path = os.path.join(self.target_path, path)
             images_np.append(imresize(imread(img_path, mode='RGB'), (224, 224))/255.0)
@@ -76,32 +78,32 @@ class Environment(object):
 
 
 
-    def show(self):
-        show_image(self.current_image)
+    # def show(self):
+    #     show_image(self.current_image)
 
-    def show_target(self):
-        show_image(self.target_image)
+    # def show_target(self):
+    #     show_image(self.target_image)
 
-    def get_action_trajectory(self):
-        return  self.action_trajectory
+    # def get_action_trajectory(self):
+    #     return  self.action_trajectory
 
-    def get_color_feature(self,image):
-        channel_one,channel_two,channel_three = distribution_color(image)
-        result = np.concatenate([channel_one,channel_two,channel_three],axis=0).reshape([1,-1])[0]
-        # print("color_feature:",result)
-        return result
+    # def get_color_feature(self,image):
+    #     channel_one,channel_two,channel_three = distribution_color(image)
+    #     result = np.concatenate([channel_one,channel_two,channel_three],axis=0).reshape([1,-1])[0]
+    #     # print("color_feature:",result)
+    #     return result
 
-    def get_gray_feature(self,image):
-        result = distribution_gray(image).reshape([1,-1])[0]
-        # print("gray_feature:",result)
-        return result
+    # def get_gray_feature(self,image):
+    #     result = distribution_gray(image).reshape([1,-1])[0]
+    #     # print("gray_feature:",result)
+    #     return result
 
-    def save_env_image(self,success,epi):
-        time_current = time.strftime("[%Y-%m-%d-%H-%M-%S]", time.localtime(time.time()))
-        if success:
-            save_image(self.current_image, filepath=result_save_path +str(epi)+'_'+'Success_'+ str(time_current) + '_No:'+ self.img_name )
-        else:
-            save_image(self.current_image, filepath=result_save_path +str(epi)+'_'+'False_'  + str(time_current) + '_No:'+ self.img_name )
+    # def save_env_image(self,success,epi):
+    #     time_current = time.strftime("[%Y-%m-%d-%H-%M-%S]", time.localtime(time.time()))
+    #     if success:
+    #         save_image(self.current_image, filepath=result_save_path +str(epi)+'_'+'Success_'+ str(time_current) + '_No:'+ self.img_name )
+    #     else:
+    #         save_image(self.current_image, filepath=result_save_path +str(epi)+'_'+'False_'  + str(time_current) + '_No:'+ self.img_name )
 
 
 
